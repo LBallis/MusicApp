@@ -5,11 +5,13 @@ import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import view.View;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLEncoder;
+
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -18,17 +20,26 @@ import java.util.*;
 
 public class Auth {
 
-    private static final String CLIENT_ID = "322cc29c5b19484f999e94ec201c0866";
-    private static final String CLIENT_SECRET = "59d2f56563b54b9b80927f0ef87e8fa3";
-    private static final String AUTH_SPOTIFY_URI = "https://accounts.spotify.com";
-    private static final String REDIRECT_URI = "http://localhost:8080/";
+    public static final String CLIENT_ID = "322cc29c5b19484f999e94ec201c0866";
+    public static final String CLIENT_SECRET = "59d2f56563b54b9b80927f0ef87e8fa3";
+    public static final String AUTH_SPOTIFY_URI = "https://accounts.spotify.com";
+    public static final String REDIRECT_URI = "http://localhost:8080/";
 
+
+    private View view = new View(this);
+
+    public static boolean uriGranted = false;
+    public static String AUTH_URI;
+
+    boolean isAuthorized = false;
     static String authCode = "";
-    static String accessToken = "";
+    public String accessToken = "";
 
-    public static void init() throws IOException {
+
+    public void init() throws IOException {
         HttpServer server = HttpServer.create();
         server.bind(new InetSocketAddress(8080), 0);
+
         server.createContext("/",
                 new HttpHandler() {
                     @Override
@@ -54,9 +65,7 @@ public class Auth {
         );
 
         server.start();
-
-        System.out.println("use this link to request the access code:");
-        System.out.println((Main.authUriGranted ? Main.AUTH_URI : AUTH_SPOTIFY_URI) +"/authorize"+"?client_id="+ CLIENT_ID +"&redirect_uri="+ REDIRECT_URI +"&response_type=code");
+        view.promptForAuthorization();
 
         System.out.println("waiting for code...");
         while (authCode.isEmpty()){
@@ -66,7 +75,7 @@ public class Auth {
         server.stop(1);
     }
 
-    public static boolean getAccessToken() throws IOException, InterruptedException {
+    public boolean getAccessToken() throws IOException, InterruptedException {
         System.out.println("making http request for access_token...");
         HttpClient client = HttpClient.newBuilder().build();
 
@@ -78,7 +87,7 @@ public class Auth {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .headers("Content-Type", "application/x-www-form-urlencoded", "Authorization", "Basic " + Base64.getEncoder().encodeToString((CLIENT_ID + ":" + CLIENT_SECRET).getBytes()))
-                .uri(URI.create((Main.authUriGranted ? Main.AUTH_URI : AUTH_SPOTIFY_URI) +"/api/token"))
+                .uri(URI.create((uriGranted ? AUTH_URI : AUTH_SPOTIFY_URI) +"/api/token"))
                 .POST(buildFormDataFromMap(data))
                 .build();
 
@@ -87,11 +96,11 @@ public class Auth {
             JsonObject jsonObj = (JsonObject) JsonParser.parseString(response.body());
             accessToken += jsonObj.get("access_token").getAsString();
         }
-        System.out.println(accessToken);
+        view.showAccessToken();
         return response.body().contains("access_token");
     }
 
-    private static HttpRequest.BodyPublisher buildFormDataFromMap(Map<Object, Object> data) {
+    private HttpRequest.BodyPublisher buildFormDataFromMap(Map<Object, Object> data) {
         var builder = new StringBuilder();
         for (Map.Entry<Object, Object> entry : data.entrySet()) {
             if (builder.length() > 0) {
@@ -103,5 +112,4 @@ public class Auth {
         }
         return HttpRequest.BodyPublishers.ofString(builder.toString());
     }
-
 }
